@@ -1,7 +1,14 @@
 // =============================================
 // MODERATION & SECURITY SYSTEM
 // =============================================
+// =============================================
+// SUPABASE LIVE CONNECTION CONFIGURATION
+// =============================================
+const SUPABASE_URL = "https://iaadxkvwrlvorvtaztnt.supabase.co"; 
+const SUPABASE_ANON_KEY = "sb_publishable_TH_2ulBxoZyW1w7jvb_bsQ_hEGtpM9v";
 
+// Initialize the global supabase client
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // List of words to block (case-insensitive)
 const BANNED_WORDS = [
     'fuck', 'shit', 'bitch', 'asshole', 'dick', 'pussy', 'cunt', 'whore',
@@ -26,44 +33,45 @@ function checkContentSafety(text) {
 // DATA - Hostels & Reviews
 // =============================================
 
-const hostels = [
-{ id: 1, block: 'A', name: 'A - ALBERT EINSTEIN BLOCK',image: 'hostelpics/test.jpeg', roomTypes: ['2 Bed AC','2 Bed NAC','4 Bed AC','4 Bed NAC','6 Bed NAC'] },
+// const hostels = [
+// { id: 1, block: 'A', name: 'A - ALBERT EINSTEIN BLOCK',image: 'hostelpics/test.jpeg', roomTypes: ['2 Bed AC','2 Bed NAC','4 Bed AC','4 Bed NAC','6 Bed NAC'] },
 
-{ id: 2, block: 'C', name: 'C - RABINDRANATH TAGORE BLOCK',image: 'hostelpics/test1.jpeg', roomTypes: ['2 Bed NAC','4 Bed NAC'] },
+// { id: 2, block: 'C', name: 'C - RABINDRANATH TAGORE BLOCK',image: 'hostelpics/test1.jpeg', roomTypes: ['2 Bed NAC','4 Bed NAC'] },
 
-{ id: 3, block: 'D', name: 'D - NELSON MANDELA BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC'] },
+// { id: 3, block: 'D', name: 'D - NELSON MANDELA BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC'] },
 
-{ id: 4, block: 'DX', name: 'DX - NELSON MANDELA BLOCK', roomTypes: ['3 Bed AC','3 Bed NAC','4 Bed AC','4 Bed NAC'] },
+// { id: 4, block: 'DX', name: 'DX - NELSON MANDELA BLOCK', roomTypes: ['3 Bed AC','3 Bed NAC','4 Bed AC','4 Bed NAC'] },
 
-{ id: 5, block: 'E', name: 'E - SIR C V RAMAN BLOCK', roomTypes: ['2 Bed NAC'] },
+// { id: 5, block: 'E', name: 'E - SIR C V RAMAN BLOCK', roomTypes: ['2 Bed NAC'] },
 
-{ id: 6, block: 'F', name: 'F - RAMANUJAM BLOCK', roomTypes: ['2 Bed AC','4 Bed AC','6 Bed AC'] },
+// { id: 6, block: 'F', name: 'F - RAMANUJAM BLOCK', roomTypes: ['2 Bed AC','4 Bed AC','6 Bed AC'] },
 
-{ id: 7, block: 'G', name: 'G - SOCRATES BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC','4 Bed AC','4 Bed NAC'] },
+// { id: 7, block: 'G', name: 'G - SOCRATES BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC','4 Bed AC','4 Bed NAC'] },
 
-{ id: 8, block: 'H', name: 'H - JOHN KENNEDY BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC','3 Bed NAC'] },
+// { id: 8, block: 'H', name: 'H - JOHN KENNEDY BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC','3 Bed NAC'] },
 
-{ id: 9, block: 'J', name: 'J - JOHN KENNEDY BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC','3 Bed NAC'] },
+// { id: 9, block: 'J', name: 'J - JOHN KENNEDY BLOCK', roomTypes: ['1 Bed AC','1 Bed NAC','3 Bed NAC'] },
 
-{ id: 10, block: 'K', name: 'K - DR SARVAPALLI RADHAKRISHNAN BLOCK', roomTypes: ['4 Bed AC','6 Bed AC'] },
+// { id: 10, block: 'K', name: 'K - DR SARVAPALLI RADHAKRISHNAN BLOCK', roomTypes: ['4 Bed AC','6 Bed AC'] },
 
-{ id: 11, block: 'L', name: 'L - NETAJI SUBASH CHANDRA BOSE BLOCK', roomTypes: ['1 Bed AC','2 Bed AC','2 Bed NAC','3 Bed AC','4 Bed AC','4 Bed NAC','6 Bed AC'] },
+// { id: 11, block: 'L', name: 'L - NETAJI SUBASH CHANDRA BOSE BLOCK', roomTypes: ['1 Bed AC','2 Bed AC','2 Bed NAC','3 Bed AC','4 Bed AC','4 Bed NAC','6 Bed AC'] },
 
-{ id: 12, block: 'M', name: 'M - QUAID-E-MILLAT MUHAMMED ISMAIL BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','6 Bed AC'] },
+// { id: 12, block: 'M', name: 'M - QUAID-E-MILLAT MUHAMMED ISMAIL BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','6 Bed AC'] },
 
-{ id: 13, block: 'MX', name: 'MX - QUAID-E-MILLAT MUHAMMED ISMAIL BLOCK', roomTypes: ['4 Bed NAC','6 Bed NAC'] },
+// { id: 13, block: 'MX', name: 'MX - QUAID-E-MILLAT MUHAMMED ISMAIL BLOCK', roomTypes: ['4 Bed NAC','6 Bed NAC'] },
 
-{ id: 14, block: 'N', name: 'N - CHARLES DARWIN BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','6 Bed AC'] },
+// { id: 14, block: 'N', name: 'N - CHARLES DARWIN BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','6 Bed AC'] },
 
-{ id: 15, block: 'P', name: 'P - SARDAR PATEL BLOCK', roomTypes: ['2 Bed NAC','3 Bed NAC','4 Bed NAC','6 Bed NAC'] },
+// { id: 15, block: 'P', name: 'P - SARDAR PATEL BLOCK', roomTypes: ['2 Bed NAC','3 Bed NAC','4 Bed NAC','6 Bed NAC'] },
 
-{ id: 16, block: 'Q', name: 'Q - VAJPAYEE BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','4 Bed AC'], bedType: 'Deluxe' },
+// { id: 16, block: 'Q', name: 'Q - VAJPAYEE BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','4 Bed AC'], bedType: 'Deluxe' },
 
-{ id: 17, block: 'R', name: 'R - MUTHAMIZHARINGNAR KALAIGNAR M KARUNANIDHI BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','4 Bed AC'], bedType: 'Deluxe' },
+// { id: 17, block: 'R', name: 'R - MUTHAMIZHARINGNAR KALAIGNAR M KARUNANIDHI BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','4 Bed AC'], bedType: 'Deluxe' },
 
-{ id: 18, block: 'T', name: 'T - JAGDISH CHANDRA BOSE BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','4 Bed AC'], bedType: 'Deluxe' }
-];
+// { id: 18, block: 'T', name: 'T - JAGDISH CHANDRA BOSE BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','4 Bed AC'], bedType: 'Deluxe' }
+// ];
 
+let hostels = [];
 let reviews = JSON.parse(localStorage.getItem('hostel_reviews')) || [];
 
 // =============================================
@@ -1425,3 +1433,42 @@ function initApp() {
 
     renderApp();
 }
+// =============================================
+// DATABASE INTEGRATION FETCH PIPELINE
+// =============================================
+
+/**
+ * Fetches the baseline hostels data from your live Supabase database
+ */
+async function fetchHostelsFromDatabase() {
+    try {
+        const { data, error } = await supabase
+            .from('hostels')
+            .select('*')
+            .order('block', { ascending: true });
+
+        if (error) throw error;
+
+        // Save the live database entries into your global state variable
+        hostels = data;
+        console.log("Successfully loaded hostels from database:", hostels);
+
+        // Preprocess strings into objects just like your local template expected
+        hostels.forEach(h => {
+            h.description = h.description || `Welcome to ${h.name} (Block ${h.block}).`;
+            // If database passes a clean structure, make sure h.room_types is defined
+            h.room_types = h.room_types || [];
+        });
+
+        // Re-render your home page layout dynamically with the database data!
+        renderApp(); 
+    } catch (err) {
+        console.error("Error fetching hostels data:", err.message);
+        if (typeof showToast === "function") {
+            showToast("Failed to load hostel blocks from database 😢", "error");
+        }
+    }
+}
+
+// Automatically trigger the database check as soon as your script finishes initializing
+fetchHostelsFromDatabase();
