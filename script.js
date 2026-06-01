@@ -8,7 +8,7 @@ const SUPABASE_URL = "https://iaadxkvwrlvorvtaztnt.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYWR4a3Z3cmx2b3J2dGF6dG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMDcwMDQsImV4cCI6MjA5NTg4MzAwNH0.I8SNFq1IuVY4k7_l6qL68nFTfFquON_tUyI-WMXNJgk";
 
 // Initialize the global supabase client
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = supabaseJS.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // List of words to block (case-insensitive)
 const BANNED_WORDS = [
     'fuck', 'shit', 'bitch', 'asshole', 'dick', 'pussy', 'cunt', 'whore',
@@ -80,22 +80,29 @@ let reviews = JSON.parse(localStorage.getItem('hostel_reviews')) || [];
 // =============================================
 // DATA PREPROCESSING (Fixes data structure mismatches)
 // =============================================
-hostels.forEach(h => {
-    // 1. Provide a default description so searches and rendering don't crash
-    h.description = h.description || `Welcome to ${h.name} (Block ${h.block}). This block features high-quality student housing options including ${h.roomTypes.join(', ')}.`;
+// =============================================
+// DATA PREPROCESSING (Fixes data structure mismatches)
+// =============================================
+function preprocessHostelData(dataArray) {
+    if (!dataArray) return;
     
-    // 2. Map the string array into the expected object structure matching your code
-    if (h.roomTypes && !h.room_types) {
-        h.room_types = h.roomTypes.map(roomStr => {
-            const parts = roomStr.split(' '); // Splits "2 Bed AC" into ["2", "Bed", "AC"]
-            return {
-                room_size: parseInt(parts[0]),        // 2
-                ac: parts[2] === 'AC',                // true if 'AC', false if 'NAC'
-                bed_type: h.bedType || 'Bunk'         // Uses 'Deluxe' if specified, otherwise defaults to 'Bunk'
-            };
-        });
-    }
-});
+    dataArray.forEach(h => {
+        // 1. Provide a default description so searches and rendering don't crash
+        h.description = h.description || `Welcome to ${h.name} (Block ${h.block}).`;
+        
+        // 2. Map the string array into the expected object structure matching your code
+        if (h.roomTypes && !h.room_types) {
+            h.room_types = h.roomTypes.map(roomStr => {
+                const parts = roomStr.split(' '); // Splits "2 Bed AC" into ["2", "Bed", "AC"]
+                return {
+                    room_size: parseInt(parts[0]) || 2,   // 2
+                    ac: parts[2] === 'AC',               // true if 'AC', false if 'NAC'
+                    bed_type: h.bedType || 'Bunk'         // Uses 'Deluxe' if specified, otherwise defaults to 'Bunk'
+                };
+            });
+        }
+    });
+}
 let currentView = 'home';
 let currentHostelId = null;
 let currentTab = 'overview';
@@ -1433,6 +1440,7 @@ function initApp() {
 
     renderApp();
 }
+
 // =============================================
 // DATABASE INTEGRATION FETCH PIPELINE
 // =============================================
@@ -1451,14 +1459,11 @@ async function fetchHostelsFromDatabase() {
 
         // Save the live database entries into your global state variable
         hostels = data;
+        
+        // Run the preprocessor HERE now that data actually exists!
+        preprocessHostelData(hostels);
+        
         console.log("Successfully loaded hostels from database:", hostels);
-
-        // Preprocess strings into objects just like your local template expected
-        hostels.forEach(h => {
-            h.description = h.description || `Welcome to ${h.name} (Block ${h.block}).`;
-            // If database passes a clean structure, make sure h.room_types is defined
-            h.room_types = h.room_types || [];
-        });
 
         // Re-render your home page layout dynamically with the database data!
         renderApp(); 
