@@ -5,7 +5,7 @@
 // SUPABASE LIVE CONNECTION CONFIGURATION
 // =============================================
 const SUPABASE_URL = "https://iaadxkvwrlvorvtaztnt.supabase.co"; 
-const SUPABASE_ANON_KEY = "sb_publishable_TH_2ulBxoZyW1w7jvb_bsQ_hEGtpM9v";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYWR4a3Z3cmx2b3J2dGF6dG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMDcwMDQsImV4cCI6MjA5NTg4MzAwNH0.I8SNFq1IuVY4k7_l6qL68nFTfFquON_tUyI-WMXNJgk";
 
 // Initialize the global supabase client
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
