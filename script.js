@@ -4,11 +4,18 @@
 // =============================================
 // SUPABASE LIVE CONNECTION CONFIGURATION
 // =============================================
+// =============================================
+// SUPABASE LIVE CONNECTION CONFIGURATION
+// =============================================
+// =============================================
+// SUPABASE LIVE CONNECTION CONFIGURATION
+// =============================================
 const SUPABASE_URL = "https://iaadxkvwrlvorvtaztnt.supabase.co"; 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYWR4a3Z3cmx2b3J2dGF6dG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMDcwMDQsImV4cCI6MjA5NTg4MzAwNH0.I8SNFq1IuVY4k7_l6qL68nFTfFquON_tUyI-WMXNJgk";
 
-// Initialize the global supabase client
-const supabase = supabaseJS.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Your global state variable
 // List of words to block (case-insensitive)
 const BANNED_WORDS = [
     'fuck', 'shit', 'bitch', 'asshole', 'dick', 'pussy', 'cunt', 'whore',
@@ -71,8 +78,12 @@ function checkContentSafety(text) {
 // { id: 18, block: 'T', name: 'T - JAGDISH CHANDRA BOSE BLOCK', roomTypes: ['2 Bed AC','3 Bed AC','4 Bed AC'], bedType: 'Deluxe' }
 // ];
 
+
+// 🌟 FIX: Add global placeholders for uploaded photo URLs
+let currentRoomPhotoUrl = null;
+let currentOutsideViewPhotoUrl = null;
 let hostels = [];
-let reviews = JSON.parse(localStorage.getItem('hostel_reviews')) || [];
+let reviews = [];
 
 // =============================================
 // STATE
@@ -1077,7 +1088,7 @@ function renderReviewsTab(hostel, hostelReviews) {
                                 <div class="text-sm font-bold ${ratingColor(6 - r.noise)}">${r.noise}</div>
                             </div>
                             <div class="text-center p-2 bg-hostel-surface rounded-lg">
-                                <div class="text-[10px] text-hostel-muted mb-0.5">Lift</div>
+                                <div class="text-[10px] text-hostel-muted mb-0.5">Lift Wait</div>
                                 <div class="text-sm font-bold ${ratingColor(6 - r.lift_wait)}">${r.lift_wait}</div>
                             </div>
                             <div class="text-center p-2 bg-hostel-surface rounded-lg">
@@ -1235,7 +1246,7 @@ function renderReviewsTab(hostel, hostelReviews) {
                                 <input id="rev_room_photo" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload(this, 'room_preview')">
                                 <div id="room_preview" class="space-y-2">
                                     <i data-lucide="camera" class="w-8 h-8 mx-auto text-hostel-muted"></i>
-                                    <p class="text-sm text-hostel-muted">Click to upload room photo</p>
+                                    <p class="text-sm text-hostel-muted">Click to upload room photo - Keep uploads appropriate </p>
                                 </div>
                             </div>
                         </div>
@@ -1245,7 +1256,7 @@ function renderReviewsTab(hostel, hostelReviews) {
                                 <input id="rev_view_photo" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload(this, 'view_preview')">
                                 <div id="view_preview" class="space-y-2">
                                     <i data-lucide="mountain" class="w-8 h-8 mx-auto text-hostel-muted"></i>
-                                    <p class="text-sm text-hostel-muted">Click to upload window/balcony view</p>
+                                    <p class="text-sm text-hostel-muted">Click to upload window view (Optional but helps!) - Keep uploads appropriate</p>
                                 </div>
                             </div>
                         </div>
@@ -1265,114 +1276,176 @@ function renderReviewsTab(hostel, hostelReviews) {
 // REVIEW SUBMISSION
 // =============================================
 
-function handlePhotoUpload(input, previewId) {
+// =============================================
+// PHOTO UPLOAD TO SUPABASE STORAGE
+// =============================================
+async function handlePhotoUpload(input, previewId) {
     const preview = document.getElementById(previewId);
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            preview.innerHTML = `
-                <img src="${e.target.result}" alt="Preview" class="max-h-32 mx-auto rounded-lg object-cover">
-                <p class="text-xs text-brand-400">✓ Photo selected</p>
-            `;
-            input.closest('.photo-upload-area').classList.add('has-image');
-        };
-        reader.readAsDataURL(input.files[0]);
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    
+    // 1. Show a loading status inside the upload box UI
+    preview.innerHTML = `
+        <div class="animate-pulse space-y-2">
+            <div class="w-6 h-6 border-2 border-t-transparent border-brand-400 rounded-full mx-auto animate-spin"></div>
+            <p class="text-xs text-brand-400">Uploading to cloud...</p>
+        </div>
+    `;
+
+    try {
+        // 2. Generate a clean, unique file name to avoid overwriting files (e.g., "1715694830112-room.jpg")
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${previewId}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        // 3. Upload the file to your Supabase Storage Bucket ('hostel-images')
+        showToast("Uploading image to cloud storage... 📸", "info");
+        const { data, error } = await db.storage
+            .from('hostel-images') // Make sure this matches your bucket name exactly!
+            .upload(filePath, file);
+
+        if (error) throw error;
+
+        // 4. Extract the Public URL for that uploaded object
+        const { data: urlData } = db.storage
+            .from('hostel-images')
+            .getPublicUrl(filePath);
+
+        const publicUrl = urlData.publicUrl;
+
+        // 5. Update the correct global variable based on which input box was clicked
+        if (previewId === 'room_preview') {
+            currentRoomPhotoUrl = publicUrl;
+            showToast("Room photo uploaded successfully! 🛏️", "success");
+        } else if (previewId === 'view_preview') {
+            currentOutsideViewPhotoUrl = publicUrl;
+            showToast("Window view photo uploaded successfully! 🌅", "success");
+        }
+
+        // 6. Replace the upload text with a small thumbnail preview of the actual hosted image
+        preview.innerHTML = `
+            <img src="${publicUrl}" class="w-full h-24 object-cover rounded-lg shadow-md border border-brand-500/30">
+            <p class="text-[10px] text-green-400 mt-1">✓ Cloud Synchronized</p>
+        `;
+
+    } catch (err) {
+        console.error("Storage upload failed:", err.message);
+        showToast("Photo upload failed. Check bucket permissions!", "error");
+        
+        // Reset the UI back to standard icon if it crashes
+        preview.innerHTML = `
+            <i data-lucide="${previewId === 'room_preview' ? 'camera' : 'mountain'}" class="w-8 h-8 mx-auto text-hostel-muted"></i>
+            <p class="text-sm text-hostel-muted">Click to retry upload</p>
+        `;
+        lucide.createIcons({ nodes: [preview] });
     }
 }
 
-function submitReview(event, hostelId) {
-    event.preventDefault();
-
-    const comment = document.getElementById('rev_comment').value;
-    const view = document.getElementById('rev_view').value;
-
-    // =============================================
-    // 1. AUTOMATED PROFANITY CHECK
-    // =============================================
-    // Run safety checks on both the main comment and the view description inputs
-    if (!checkContentSafety(comment) || !checkContentSafety(view)) {
-        showToast("🚨 Review Blocked: Your post contains profanity. Please keep it clean!", "error");
-        return; // Halts execution instantly
+/**
+ * Handles submission of a new hostel review and saves it to the Supabase database
+ */
+/**
+ * Handles submission of a new hostel review and saves it to the public.reviews table
+ */
+// =============================================
+// REVIEW SUBMISSION
+// =============================================
+// =============================================
+// REVIEW SUBMISSION
+// =============================================
+// =============================================
+// REVIEW SUBMISSION
+// =============================================
+async function submitReview(e) {
+    if (e && typeof e.preventDefault === 'function') {
+        e.preventDefault();
     }
 
-    // 2. ONE REVIEW PER BLOCK ENFORCEMENT
-    // Checks if this device has already submitted a review for this specific hostel
-    const alreadyReviewed = reviews.some(r => r.hostel_id === hostelId);
-    if (alreadyReviewed) {
-        showToast("Bro, you've already dropped a review for this block! One per person. 🛑", "error");
-        return;
+    console.log("Form submission pipeline engaged...");
+
+    const commentInput = document.getElementById('rev_comment');     
+    const roomNoInput = document.getElementById('rev_room');         
+    const ratingOverallInput = document.getElementById('rev_overall');
+    const ratingWifiInput = document.getElementById('rev_wifi');       
+    const ratingCleanInput = document.getElementById('rev_clean');   
+    const ratingMessInput = document.getElementById('rev_maint');     
+
+    const comment = commentInput ? commentInput.value.trim() : "";
+    const roomNo = roomNoInput ? roomNoInput.value.trim() : "";
+
+    const ratingOverall = ratingOverallInput ? parseInt(ratingOverallInput.value) : 3;
+    const ratingWifi = ratingWifiInput ? parseInt(ratingWifiInput.value) : 3;
+    const ratingClean = ratingCleanInput ? parseInt(ratingCleanInput.value) : 3;
+    const ratingMess = ratingMessInput ? parseInt(ratingMessInput.value) : 3;
+
+    if (!comment || !roomNo) {
+        showToast("Please write something first and provide your Room No! ✍️", "error");
+        return; 
     }
 
-    // Get the submit button to disable it immediately (Prevents multi-click spam)
-    const form = document.getElementById('reviewForm');
-    const submitBtn = form.querySelector('button[type="submit"]');
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerText = "Submitting...";
+    if (typeof checkContentSafety === 'function' && !checkContentSafety(comment)) {
+        showToast("Review contains flagged language. Keep it helpful, bro! 🛑", "error");
+        return; 
     }
 
-    const status = document.getElementById('rev_status').value;
-    const room = document.getElementById('rev_room').value;
-    const roomType = document.getElementById('rev_type').value; 
-    const floor = parseInt(document.getElementById('rev_floor').value) || 0;
-    const overall = parseInt(document.getElementById('rev_overall').value);
-    const wifi = parseInt(document.getElementById('rev_wifi').value);
-    const noise = parseInt(document.getElementById('rev_noise').value);
-    const lift = parseInt(document.getElementById('rev_lift').value);
-    const clean = parseInt(document.getElementById('rev_clean').value);
-    const queue = parseInt(document.getElementById('rev_queue').value);
-    const hotwater = parseInt(document.getElementById('rev_hotwater').value);
-    const maint = parseInt(document.getElementById('rev_maint').value);
+    const outsideViewInput = document.getElementById('rev_outside_view') || document.getElementById('outsideViewDesc');
+    const outsideViewDesc = outsideViewInput ? outsideViewInput.value.trim() : "";
 
-    // Get photo previews if they have images
-    const roomPreview = document.getElementById('room_preview').querySelector('img');
-    const viewPreview = document.getElementById('view_preview').querySelector('img');
+    const firstDigitMatch = roomNo.match(/\d/);
+    const calculatedFloor = firstDigitMatch ? parseInt(firstDigitMatch[0]) : 0;
 
-    const newReview = {
-        id: Date.now(), 
-        hostel_id: hostelId,
-        overall_rating: overall,
-        wifi: wifi,
-        noise: noise,
-        lift_wait: lift,
-        cleanliness: clean,
-        queue: queue,
-        hot_water: hotwater,
-        maintenance: maint,
+    const reviewPayload = {
+        hostel_id: currentHostelId,
+        overall_rating: ratingOverall, 
+        wifi: ratingWifi,
+        noise: parseInt(document.getElementById('rev_noise')?.value) || 3, 
+        lift_wait: parseInt(document.getElementById('rev_lift')?.value) || 3, 
+        cleanliness: ratingClean,
+        queue: 3, 
+        hot_water: 3, 
+        maintenance: ratingMess,
         comment: comment,
-        resident_status: status,
-        room_identifier: room,
-        floor: floor,
-        room_type: roomType, 
-        outside_view_description: view,
-        room_photo: roomPreview ? roomPreview.src : null,
-        outside_view_photo: viewPreview ? viewPreview.src : null,
-        date: new Date().toISOString().split('T')[0]
+        resident_status: document.getElementById('rev_status')?.value || "Resident",
+        room_identifier: roomNo,
+        floor: calculatedFloor, 
+        outside_view_description: outsideViewDesc, 
+        room_photo: typeof currentRoomPhotoUrl !== 'undefined' ? currentRoomPhotoUrl : null, 
+        outside_view_photo: typeof currentOutsideViewPhotoUrl !== 'undefined' ? currentOutsideViewPhotoUrl : null,
+        user_email: null
     };
 
-    // Push and permanently save data
-    reviews.push(newReview);
-    localStorage.setItem('hostel_reviews', JSON.stringify(reviews));
+    try {
+        showToast("Posting your review to the cloud... 🚀", "info");
 
-    // 3. THE POPUP / FEEDBACK FIX
-    showToast('Review submitted! Thanks for helping future students 🙌', 'success');
-    
-    // 4. SPAM PREVENTION & CLEAR FORM FIX
-    form.reset(); // This clears out all the inputs completely so they can't re-submit
-    
-    // Clear out photo dropzone UI previews if any were added
-    if (roomPreview) document.getElementById('room_preview').innerHTML = '';
-    if (viewPreview) document.getElementById('view_preview').innerHTML = '';
+        const { data, error } = await db
+            .from('reviews')
+            .insert([reviewPayload])
+            .select();
 
-    // Re-render the app to show the new review instantly
-    renderApp();
-    
-    // Scroll smoothly back up to the top of the reviews section to see their post
-    const reviewsSection = document.getElementById('reviews-section');
-    if (reviewsSection) {
-        reviewsSection.scrollIntoView({ behavior: 'smooth' });
-    } else {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (error) throw error;
+
+        console.log("Successfully stored review in database:", data);
+        showToast("Review submitted successfully! 🙌", "success");
+
+        if (typeof fetchReviewsFromDatabase === 'function') {
+            await fetchReviewsFromDatabase();
+        }
+
+        // Hide modal form layout manually
+        document.getElementById('reviewModal')?.classList.add('hidden');
+
+        // Reset global variables so the next review starts clean
+        if (typeof currentRoomPhotoUrl !== 'undefined') currentRoomPhotoUrl = null;
+        if (typeof currentOutsideViewPhotoUrl !== 'undefined') currentOutsideViewPhotoUrl = null;
+
+        if (e && e.target && typeof e.target.reset === 'function') {
+            e.target.reset();
+        }
+
+    } catch (err) {
+        console.error("Database submission failed:", err.message);
+        showToast("Failed to sync review online. 😢", "error");
     }
 }
 
@@ -1437,9 +1510,14 @@ function initApp() {
     const isDark = document.documentElement.classList.contains('dark');
     document.querySelectorAll('.dark-icon').forEach(el => el.style.display = isDark ? 'block' : 'none');
     document.querySelectorAll('.light-icon').forEach(el => el.style.display = isDark ? 'none' : 'block');
-
+    if (typeof monitorAuthState === 'function') {
+        monitorAuthState();
+    }
+    fetchHostelsFromDatabase();
+    fetchReviewsFromDatabase();
     renderApp();
 }
+// Temporary test login to populate auth.role() = 'authenticated'
 
 // =============================================
 // DATABASE INTEGRATION FETCH PIPELINE
@@ -1448,9 +1526,25 @@ function initApp() {
 /**
  * Fetches the baseline hostels data from your live Supabase database
  */
+// =============================================
+// DATABASE INTEGRATION FETCH PIPELINE
+// =============================================
+// =============================================
+// DATABASE INTEGRATION PIPELINES
+// =============================================
+
+/**
+ * Channel 1: Fetches the baseline hostels data from your live Supabase database
+ */
+/**
+ * Channel 1: Fetches the baseline hostels data dynamically from your live Supabase database
+ */
+/**
+ * Channel 1: Fetches the baseline hostels data dynamically from your live Supabase database
+ */
 async function fetchHostelsFromDatabase() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await db
             .from('hostels')
             .select('*')
             .order('block', { ascending: true });
@@ -1458,14 +1552,28 @@ async function fetchHostelsFromDatabase() {
         if (error) throw error;
 
         // Save the live database entries into your global state variable
-        hostels = data;
-        
-        // Run the preprocessor HERE now that data actually exists!
-        preprocessHostelData(hostels);
-        
+        hostels = data || [];
         console.log("Successfully loaded hostels from database:", hostels);
 
-        // Re-render your home page layout dynamically with the database data!
+        // Simple sanitary check to ensure text fallbacks and images map correctly
+        hostels.forEach(h => {
+            h.description = h.description || `Welcome to ${h.name} (Block ${h.block}).`;
+            
+            // 🌟 IMAGE ALIGNMENT PIPELINE
+            // Maps your database 'image_url' column to the 'image' property your templates expect!
+            if (h.image_url) {
+                h.image = h.image_url; 
+            } else {
+                h.image = "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80"; // Global fallback placeholder
+            }
+
+            // If room_types column is null or empty for some reason, ensure it stays a safe array
+            if (!h.room_types) {
+                h.room_types = [];
+            }
+        });
+
+        // Re-render layout dynamically with pure database configurations
         renderApp(); 
     } catch (err) {
         console.error("Error fetching hostels data:", err.message);
@@ -1475,5 +1583,78 @@ async function fetchHostelsFromDatabase() {
     }
 }
 
+/**
+ * Channel 2: Fetches all student reviews directly from your live Supabase database
+ */
+async function fetchReviewsFromDatabase() {
+    try {
+        console.log("Fetching live student reviews...");
+        const { data, error } = await db
+            .from('reviews')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Save live database entries into your global reviews state
+        reviews = data || [];
+        console.log("Successfully loaded reviews from database:", reviews);
+
+        // Force a re-render so math calculations update with live scores
+        renderApp();
+    } catch (err) {
+        console.error("Error fetching reviews data:", err.message);
+    }
+}
 // Automatically trigger the database check as soon as your script finishes initializing
-fetchHostelsFromDatabase();
+// =============================================
+// GOOGLE AUTHENTICATION SYSTEM
+// =============================================
+
+// 1. Kick off the Supabase Google OAuth flow
+async function loginWithGoogle() {
+    try {
+        const { error } = await db.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                // This redirects them back to your local development site or live domain after login
+                redirectTo: window.location.origin 
+            }
+        });
+        if (error) throw error;
+    } catch (err) {
+        console.error("Login failed:", err.message);
+        showToast("Google Sign-In failed 😢", "error");
+    }
+}
+
+// 2. Clear session data on sign out
+async function handleSignOut() {
+    await db.auth.signOut();
+    showToast("Logged out successfully!", "success");
+    window.location.reload(); // Refresh to clean state
+}
+
+// 3. Monitor active sessions and update the UI profile icon dynamically
+function monitorAuthState() {
+    // Get current logged-in user details safely
+    const session = db.auth.session ? db.auth.session() : null; 
+    const user = db.auth.user ? db.auth.user() : db.auth.currentUser;
+    const authContainer = document.getElementById('auth-container');
+
+    if (!authContainer) return;
+
+    if (user) {
+        // If logged in, replace the "Login" button with their Google avatar
+        const avatarUrl = user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${user.email}`;
+        
+        authContainer.innerHTML = `
+            <div class="flex items-center gap-3">
+                <img src="${avatarUrl}" alt="Profile" class="w-8 h-8 rounded-full border-2 border-brand-500 shadow-md">
+                <button onclick="handleSignOut()" class="text-xs text-gray-400 hover:text-red-400 transition-colors">
+                    Sign Out
+                </button>
+            </div>
+        `;
+    }
+}
