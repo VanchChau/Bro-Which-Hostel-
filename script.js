@@ -1279,7 +1279,6 @@ function renderReviewsTab(hostel, hostelReviews) {
 // =============================================
 // PHOTO UPLOAD TO SUPABASE STORAGE
 // =============================================
-console.log(reviewPayload);
 async function handlePhotoUpload(input, previewId) {
     const preview = document.getElementById(previewId);
     if (!input.files || input.files.length === 0) return;
@@ -1410,7 +1409,6 @@ async function submitReview(e) {
         
         room_photo: currentRoomPhotoUrl,
         outside_view_photo: currentOutsideViewPhotoUrl,
-        date: new Date().toISOString(),
         resident_status: document.getElementById('rev_status')?.value || "Current"
     };
 
@@ -1441,8 +1439,8 @@ async function submitReview(e) {
         
         renderApp();
     } catch (err) {
-        console.error("Database submission failed:", err.message);
-        showToast("Failed to sync review online. 😢", "error");
+        console.error("Database submission failed:", err);
+        showToast(`Failed to sync review online: ${err.message || err.code || JSON.stringify(err)}`, "error");
     }
 }
 
