@@ -1279,6 +1279,7 @@ function renderReviewsTab(hostel, hostelReviews) {
 // =============================================
 // PHOTO UPLOAD TO SUPABASE STORAGE
 // =============================================
+console.log(reviewPayload);
 async function handlePhotoUpload(input, previewId) {
     const preview = document.getElementById(previewId);
     if (!input.files || input.files.length === 0) return;
@@ -1361,70 +1362,65 @@ async function submitReview(e) {
     if (e && typeof e.preventDefault === 'function') {
         e.preventDefault();
     }
-
     console.log("Form submission pipeline engaged...");
 
-    const commentInput = document.getElementById('rev_comment');     
-    const roomNoInput = document.getElementById('rev_room');         
+    // 1. Grab references to your elements
+    const commentInput = document.getElementById('rev_comment');
+    const roomNoInput = document.getElementById('rev_room');
+    const roomTypeSelect = document.getElementById('rev_type'); // Added for Room Configuration
+    const viewDescInput = document.getElementById('rev_view'); // Outside View Text
+    
     const ratingOverallInput = document.getElementById('rev_overall');
-    const ratingWifiInput = document.getElementById('rev_wifi');       
-    const ratingCleanInput = document.getElementById('rev_clean');   
-    const ratingMessInput = document.getElementById('rev_maint');     
-
+    const ratingWifiInput = document.getElementById('rev_wifi');
+    const ratingCleanInput = document.getElementById('rev_clean');
+    const ratingMaintInput = document.getElementById('rev_maint');
+    const ratingNoiseInput = document.getElementById('rev_noise');
+    const ratingLiftInput = document.getElementById('rev_lift');
+    const ratingQueueInput = document.getElementById('rev_queue');
+    const ratingHotWaterInput = document.getElementById('rev_hot_water');
+    
+    // 2. Extract values safely
     const comment = commentInput ? commentInput.value.trim() : "";
     const roomNo = roomNoInput ? roomNoInput.value.trim() : "";
+    const roomType = roomTypeSelect ? roomTypeSelect.value : ""; // Added
+    const outsideViewDescription = viewDescInput ? viewDescInput.value.trim() : ""; // Added
 
-    const ratingOverall = ratingOverallInput ? parseInt(ratingOverallInput.value) : 3;
-    const ratingWifi = ratingWifiInput ? parseInt(ratingWifiInput.value) : 3;
-    const ratingClean = ratingCleanInput ? parseInt(ratingCleanInput.value) : 3;
-    const ratingMess = ratingMessInput ? parseInt(ratingMessInput.value) : 3;
-
-    if (!comment || !roomNo) {
-        showToast("Please write something first and provide your Room No! ✍️", "error");
-        return; 
+    // Content Safety Moderation
+    if (!checkContentSafety(comment) || !checkContentSafety(outsideViewDescription)) {
+        showToast("Review contains prohibited language. Keep it clean! ⚠️", "error");
+        return;
     }
 
-    if (typeof checkContentSafety === 'function' && !checkContentSafety(comment)) {
-        showToast("Review contains flagged language. Keep it helpful, bro! 🛑", "error");
-        return; 
-    }
-
-    const outsideViewInput = document.getElementById('rev_outside_view') || document.getElementById('outsideViewDesc');
-    const outsideViewDesc = outsideViewInput ? outsideViewInput.value.trim() : "";
-
-    const firstDigitMatch = roomNo.match(/\d/);
-    const calculatedFloor = firstDigitMatch ? parseInt(firstDigitMatch[0]) : 0;
-
+    // 3. Build the payload matching your database columns
     const reviewPayload = {
         hostel_id: currentHostelId,
-        overall_rating: ratingOverall, 
-        wifi: ratingWifi,
-        noise: parseInt(document.getElementById('rev_noise')?.value) || 3, 
-        lift_wait: parseInt(document.getElementById('rev_lift')?.value) || 3, 
-        cleanliness: ratingClean,
-        queue: 3, 
-        hot_water: 3, 
-        maintenance: ratingMess,
+        room_identifier: roomNo || "Unknown Room",
+        room_type: roomType, // Now getting saved!
+        outside_view_description: outsideViewDescription, // Now getting saved!
         comment: comment,
-        resident_status: document.getElementById('rev_status')?.value || "Resident",
-        room_identifier: roomNo,
-        floor: calculatedFloor, 
-        outside_view_description: outsideViewDesc, 
-        room_photo: typeof currentRoomPhotoUrl !== 'undefined' ? currentRoomPhotoUrl : null, 
-        outside_view_photo: typeof currentOutsideViewPhotoUrl !== 'undefined' ? currentOutsideViewPhotoUrl : null,
-        user_email: null
+        
+        overall_rating: ratingOverallInput ? parseInt(ratingOverallInput.value) : 3,
+        wifi: ratingWifiInput ? parseInt(ratingWifiInput.value) : 3,
+        cleanliness: ratingCleanInput ? parseInt(ratingCleanInput.value) : 3,
+        maintenance: ratingMaintInput ? parseInt(ratingMaintInput.value) : 3,
+        noise: ratingNoiseInput ? parseInt(ratingNoiseInput.value) : 3,
+        lift_wait: ratingLiftInput ? parseInt(ratingLiftInput.value) : 3,
+        queue: ratingQueueInput ? parseInt(ratingQueueInput.value) : 3,
+        hot_water: ratingHotWaterInput ? parseInt(ratingHotWaterInput.value) : 3,
+        
+        room_photo: currentRoomPhotoUrl,
+        outside_view_photo: currentOutsideViewPhotoUrl,
+        date: new Date().toISOString(),
+        resident_status: document.getElementById('rev_status')?.value || "Current"
     };
 
     try {
-        showToast("Posting your review to the cloud... 🚀", "info");
-
         const { data, error } = await db
             .from('reviews')
             .insert([reviewPayload])
             .select();
 
         if (error) throw error;
-
         console.log("Successfully stored review in database:", data);
         showToast("Review submitted successfully! 🙌", "success");
 
@@ -1435,14 +1431,15 @@ async function submitReview(e) {
         // Hide modal form layout manually
         document.getElementById('reviewModal')?.classList.add('hidden');
 
-        // Reset global variables so the next review starts clean
+        // Reset global variables
         if (typeof currentRoomPhotoUrl !== 'undefined') currentRoomPhotoUrl = null;
         if (typeof currentOutsideViewPhotoUrl !== 'undefined') currentOutsideViewPhotoUrl = null;
 
         if (e && e.target && typeof e.target.reset === 'function') {
             e.target.reset();
         }
-
+        
+        renderApp();
     } catch (err) {
         console.error("Database submission failed:", err.message);
         showToast("Failed to sync review online. 😢", "error");
