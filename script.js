@@ -1155,7 +1155,7 @@ function renderReviewsTab(hostel, hostelReviews) {
                 </div>
                 ` : `
                 <p class="text-sm text-hostel-muted mb-5">Logged in as <span class="text-brand-400">${currentUser.email}</span></p>
-                <form onsubmit="submitReview(event, ${hostel.id})" class="space-y-5">`}
+                <form onsubmit="submitReview(event, ${hostel.id})" class="space-y-5">
                     <!-- Resident Status & Room -->
                     <!-- Resident Status & Room -->
 <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -1368,17 +1368,19 @@ async function handlePhotoUpload(input, previewId) {
 // =============================================
 // REVIEW SUBMISSION
 // =============================================
-async function submitReview(e) {
+async function submitReview(e, hostelId) {
     if (e && typeof e.preventDefault === 'function') {
         e.preventDefault();
     }
+    // Use passed hostelId if provided, otherwise fall back to global currentHostelId
+    if (hostelId) currentHostelId = hostelId;
     console.log("Form submission pipeline engaged...");
 
     // 1. Grab references to your elements
     const commentInput = document.getElementById('rev_comment');
     const roomNoInput = document.getElementById('rev_room');
     const roomTypeSelect = document.getElementById('rev_type'); // Added for Room Configuration
-    const viewDescInput = document.getElementById('rev_view_desc'); // Added for Outside View Text
+    const viewDescInput = document.getElementById('rev_view'); // Outside View Text
     
     const ratingOverallInput = document.getElementById('rev_overall');
     const ratingWifiInput = document.getElementById('rev_wifi');
@@ -1387,13 +1389,14 @@ async function submitReview(e) {
     const ratingNoiseInput = document.getElementById('rev_noise');
     const ratingLiftInput = document.getElementById('rev_lift');
     const ratingQueueInput = document.getElementById('rev_queue');
-    const ratingHotWaterInput = document.getElementById('rev_hot_water');
+    const ratingHotWaterInput = document.getElementById('rev_hotwater');
     
     // 2. Extract values safely
     const comment = commentInput ? commentInput.value.trim() : "";
     const roomNo = roomNoInput ? roomNoInput.value.trim() : "";
     const roomType = roomTypeSelect ? roomTypeSelect.value : ""; // Added
     const outsideViewDescription = viewDescInput ? viewDescInput.value.trim() : ""; // Added
+    const residentStatus = document.getElementById('rev_status')?.value || "Current";
 
     // Content Safety Moderation
     if (!checkContentSafety(comment) || !checkContentSafety(outsideViewDescription)) {
@@ -1421,7 +1424,7 @@ async function submitReview(e) {
         room_photo: currentRoomPhotoUrl,
         outside_view_photo: currentOutsideViewPhotoUrl,
         date: new Date().toISOString(),
-        resident_status: "Current" // Or dynamic based on your logic
+        resident_status: residentStatus
     };
 
     try {
