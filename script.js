@@ -10,6 +10,7 @@
 // =============================================
 // SUPABASE LIVE CONNECTION CONFIGURATION
 // =============================================
+
 const SUPABASE_URL = "https://iaadxkvwrlvorvtaztnt.supabase.co"; 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYWR4a3Z3cmx2b3J2dGF6dG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMDcwMDQsImV4cCI6MjA5NTg4MzAwNH0.I8SNFq1IuVY4k7_l6qL68nFTfFquON_tUyI-WMXNJgk";
 
@@ -1143,9 +1144,18 @@ function renderReviewsTab(hostel, hostelReviews) {
                 <h3 class="font-heading text-xl font-bold mb-1 flex items-center gap-2">
                     <span>✍️</span> Share Your Experience
                 </h3>
-                <p class="text-sm text-hostel-muted mb-5">Help future students decide. No login required.</p>
-
-                <form onsubmit="submitReview(event, ${hostel.id})" class="space-y-5">
+                ${!currentUser ? `
+                <div class="py-8 text-center">
+                    <div class="text-5xl mb-3">🔐</div>
+                    <p class="text-gray-300 font-medium mb-1">Login to submit a review</p>
+                    <p class="text-sm text-hostel-muted mb-5">Only verified VIT students can post reviews.</p>
+                    <button onclick="openAuthModal('login')" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 rounded-xl font-heading font-semibold text-sm transition-colors inline-flex items-center gap-2">
+                        <i data-lucide="log-in" class="w-4 h-4"></i> Login with VIT Email
+                    </button>
+                </div>
+                ` : `
+                <p class="text-sm text-hostel-muted mb-5">Logged in as <span class="text-brand-400">${currentUser.email}</span></p>
+                <form onsubmit="submitReview(event, ${hostel.id})" class="space-y-5">`}
                     <!-- Resident Status & Room -->
                     <!-- Resident Status & Room -->
 <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -1267,6 +1277,7 @@ function renderReviewsTab(hostel, hostelReviews) {
                         <i data-lucide="send" class="w-5 h-5"></i> Submit Review
                     </button>
                 </form>
+                `}
             </div>
         </div>
     `;
@@ -1367,7 +1378,7 @@ async function submitReview(e) {
     const commentInput = document.getElementById('rev_comment');
     const roomNoInput = document.getElementById('rev_room');
     const roomTypeSelect = document.getElementById('rev_type'); // Added for Room Configuration
-    const viewDescInput = document.getElementById('rev_view'); // Outside View Text
+    const viewDescInput = document.getElementById('rev_view_desc'); // Added for Outside View Text
     
     const ratingOverallInput = document.getElementById('rev_overall');
     const ratingWifiInput = document.getElementById('rev_wifi');
@@ -1409,7 +1420,8 @@ async function submitReview(e) {
         
         room_photo: currentRoomPhotoUrl,
         outside_view_photo: currentOutsideViewPhotoUrl,
-        resident_status: document.getElementById('rev_status')?.value || "Current"
+        date: new Date().toISOString(),
+        resident_status: "Current" // Or dynamic based on your logic
     };
 
     try {
@@ -1439,8 +1451,8 @@ async function submitReview(e) {
         
         renderApp();
     } catch (err) {
-        console.error("Database submission failed:", err);
-        showToast(`Failed to sync review online: ${err.message || err.code || JSON.stringify(err)}`, "error");
+        console.error("Database submission failed:", err.message);
+        showToast("Failed to sync review online. 😢", "error");
     }
 }
 
@@ -1603,53 +1615,175 @@ async function fetchReviewsFromDatabase() {
 }
 // Automatically trigger the database check as soon as your script finishes initializing
 // =============================================
-// GOOGLE AUTHENTICATION SYSTEM
+// AUTHENTICATION SYSTEM (VIT Email Only)
 // =============================================
 
-// 1. Kick off the Supabase Google OAuth flow
-async function loginWithGoogle() {
-    try {
-        const { error } = await db.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                // This redirects them back to your local development site or live domain after login
-                redirectTo: window.location.origin 
-            }
-        });
-        if (error) throw error;
-    } catch (err) {
-        console.error("Login failed:", err.message);
-        showToast("Google Sign-In failed 😢", "error");
-    }
-}
+let currentUser = null;
 
-// 2. Clear session data on sign out
-async function handleSignOut() {
-    await db.auth.signOut();
-    showToast("Logged out successfully!", "success");
-    window.location.reload(); // Refresh to clean state
-}
-
-// 3. Monitor active sessions and update the UI profile icon dynamically
 function monitorAuthState() {
-    // Get current logged-in user details safely
-    const session = db.auth.session ? db.auth.session() : null; 
-    const user = db.auth.user ? db.auth.user() : db.auth.currentUser;
-    const authContainer = document.getElementById('auth-container');
+    db.auth.onAuthStateChange((event, session) => {
+        currentUser = session?.user || null;
+        updateNavAuth();
+        renderApp();
+    });
+    // Also check immediately on load
+    db.auth.getSession().then(({ data: { session } }) => {
+        currentUser = session?.user || null;
+        updateNavAuth();
+        renderApp();
+    });
+}
 
-    if (!authContainer) return;
-
-    if (user) {
-        // If logged in, replace the "Login" button with their Google avatar
-        const avatarUrl = user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${user.email}`;
-        
-        authContainer.innerHTML = `
-            <div class="flex items-center gap-3">
-                <img src="${avatarUrl}" alt="Profile" class="w-8 h-8 rounded-full border-2 border-brand-500 shadow-md">
-                <button onclick="handleSignOut()" class="text-xs text-gray-400 hover:text-red-400 transition-colors">
-                    Sign Out
-                </button>
+function updateNavAuth() {
+    const btn = document.getElementById('nav-auth-btn');
+    if (!btn) return;
+    if (currentUser) {
+        const initials = currentUser.email?.slice(0, 2).toUpperCase() || '?';
+        btn.innerHTML = `
+            <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-xs font-bold text-white">${initials}</div>
+                <span class="hidden sm:inline text-sm text-gray-300">${currentUser.email?.split('@')[0]}</span>
+                <button onclick="handleSignOut()" class="text-xs text-gray-500 hover:text-red-400 transition-colors ml-1">Sign out</button>
             </div>
         `;
+    } else {
+        btn.innerHTML = `
+            <button onclick="openAuthModal()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-brand-600 hover:bg-brand-700 text-white font-medium transition-all">
+                <i data-lucide="log-in" class="w-4 h-4"></i> Login
+            </button>
+        `;
+        lucide.createIcons({ nodes: [btn] });
     }
+}
+
+function openAuthModal(mode = 'login') {
+    const existing = document.getElementById('authModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'authModal';
+    modal.className = 'fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-hostel-card border border-hostel-border rounded-2xl p-7 w-full max-w-md shadow-2xl animate-fade-in-up">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="font-heading text-2xl font-bold">
+                        ${mode === 'login' ? '👋 Welcome back' : '🎓 Join the community'}
+                    </h2>
+                    <p class="text-sm text-hostel-muted mt-1">VIT student emails only (@vitstudent.ac.in)</p>
+                </div>
+                <button onclick="closeAuthModal()" class="text-gray-500 hover:text-gray-300 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex rounded-xl bg-hostel-surface p-1 mb-6">
+                <button id="tab-login" onclick="switchAuthTab('login')"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'login' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}">
+                    Login
+                </button>
+                <button id="tab-signup" onclick="switchAuthTab('signup')"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'signup' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}">
+                    Sign Up
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-hostel-muted uppercase tracking-wider mb-1.5 block">VIT Email</label>
+                    <input id="auth-email" type="email" placeholder="yourname@vitstudent.ac.in"
+                        class="w-full px-3 py-2.5 bg-hostel-surface border border-hostel-border rounded-xl text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
+                </div>
+                <div>
+                    <label class="text-xs text-hostel-muted uppercase tracking-wider mb-1.5 block">Password</label>
+                    <input id="auth-password" type="password" placeholder="••••••••"
+                        class="w-full px-3 py-2.5 bg-hostel-surface border border-hostel-border rounded-xl text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
+                </div>
+
+                <button id="auth-submit-btn" onclick="handleAuthSubmit()"
+                    class="w-full py-3 bg-brand-600 hover:bg-brand-700 rounded-xl font-heading font-semibold text-base transition-colors flex items-center justify-center gap-2">
+                    <i data-lucide="log-in" class="w-5 h-5"></i>
+                    <span id="auth-btn-label">${mode === 'login' ? 'Login' : 'Create Account'}</span>
+                </button>
+
+                <p id="auth-message" class="text-sm text-center text-hostel-muted hidden"></p>
+            </div>
+        </div>
+    `;
+    modal.setAttribute('data-mode', mode);
+    document.body.appendChild(modal);
+    lucide.createIcons({ nodes: [modal] });
+    document.getElementById('auth-email').focus();
+}
+
+function switchAuthTab(mode) {
+    const modal = document.getElementById('authModal');
+    if (!modal) return;
+    modal.setAttribute('data-mode', mode);
+
+    document.getElementById('tab-login').className = `flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'login' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`;
+    document.getElementById('tab-signup').className = `flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'signup' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`;
+    document.getElementById('auth-btn-label').textContent = mode === 'login' ? 'Login' : 'Create Account';
+    document.querySelector('#authModal h2').textContent = mode === 'login' ? '👋 Welcome back' : '🎓 Join the community';
+    document.getElementById('auth-message').classList.add('hidden');
+}
+
+function closeAuthModal() {
+    document.getElementById('authModal')?.remove();
+}
+
+async function handleAuthSubmit() {
+    const modal = document.getElementById('authModal');
+    const mode = modal?.getAttribute('data-mode') || 'login';
+    const email = document.getElementById('auth-email')?.value.trim();
+    const password = document.getElementById('auth-password')?.value;
+    const msgEl = document.getElementById('auth-message');
+    const btn = document.getElementById('auth-submit-btn');
+
+    // VIT domain check
+    if (!email.endsWith('@vitstudent.ac.in')) {
+        msgEl.textContent = '⚠️ Only @vitstudent.ac.in emails are allowed.';
+        msgEl.className = 'text-sm text-center text-red-400';
+        msgEl.classList.remove('hidden');
+        return;
+    }
+    if (!password || password.length < 6) {
+        msgEl.textContent = '⚠️ Password must be at least 6 characters.';
+        msgEl.className = 'text-sm text-center text-red-400';
+        msgEl.classList.remove('hidden');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="animate-spin w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg> Please wait...`;
+
+    try {
+        if (mode === 'signup') {
+            const { error } = await db.auth.signUp({ email, password });
+            if (error) throw error;
+            msgEl.textContent = '✅ Check your VIT email for a confirmation link!';
+            msgEl.className = 'text-sm text-center text-green-400';
+            msgEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="mail" class="w-5 h-5"></i> <span>Confirmation sent</span>`;
+            lucide.createIcons({ nodes: [btn] });
+        } else {
+            const { error } = await db.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            showToast('Logged in! Welcome back 🎉', 'success');
+            closeAuthModal();
+        }
+    } catch (err) {
+        msgEl.textContent = `⚠️ ${err.message}`;
+        msgEl.className = 'text-sm text-center text-red-400';
+        msgEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="log-in" class="w-5 h-5"></i> <span>${mode === 'login' ? 'Login' : 'Create Account'}</span>`;
+        lucide.createIcons({ nodes: [btn] });
+    }
+}
+
+async function handleSignOut() {
+    await db.auth.signOut();
+    showToast('Logged out successfully!', 'success');
 }
