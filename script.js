@@ -1423,7 +1423,7 @@ async function submitReview(e, hostelId) {
         
         room_photo: currentRoomPhotoUrl,
         outside_view_photo: currentOutsideViewPhotoUrl,
-        date: new Date().toISOString(),
+        created_at: new Date().toISOString(),
         resident_status: residentStatus
     };
 
@@ -1694,7 +1694,7 @@ function openAuthModal(mode = 'login') {
             <div class="space-y-4">
                 <div>
                     <label class="text-xs text-hostel-muted uppercase tracking-wider mb-1.5 block">VIT Email</label>
-                    <input id="auth-email" type="email" placeholder="yourname@vitstudent.ac.in"
+                    <input id="auth-email" type="email" placeholder="your.name20xx@vitstudent.ac.in"
                         class="w-full px-3 py-2.5 bg-hostel-surface border border-hostel-border rounded-xl text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
                 </div>
                 <div>
