@@ -81,6 +81,8 @@ function checkContentSafety(text) {
 
 
 // 🌟 FIX: Add global placeholders for uploaded photo URLs
+let currentRoomPhotoFile=null;
+let currentOutsideViewPhotoFile=null;
 let currentRoomPhotoUrl = null;
 let currentOutsideViewPhotoUrl = null;
 let hostels = [];
@@ -1290,66 +1292,51 @@ function renderReviewsTab(hostel, hostelReviews) {
 // =============================================
 // PHOTO UPLOAD TO SUPABASE STORAGE
 // =============================================
+// =============================================
+// PHOTO UPLOAD TO SUPABASE STORAGE
+// =============================================
 async function handlePhotoUpload(input, previewId) {
     const preview = document.getElementById(previewId);
     if (!input.files || input.files.length === 0) return;
 
     const file = input.files[0];
-    
-    // 1. Show a loading status inside the upload box UI
-    preview.innerHTML = `
-        <div class="animate-pulse space-y-2">
-            <div class="w-6 h-6 border-2 border-t-transparent border-brand-400 rounded-full mx-auto animate-spin"></div>
-            <p class="text-xs text-brand-400">Uploading to cloud...</p>
-        </div>
-    `;
 
-    try {
-        // 2. Generate a clean, unique file name to avoid overwriting files (e.g., "1715694830112-room.jpg")
+    // Store file in memory, don't upload yet
+    if (previewId === 'room_preview') {
+        currentRoomPhotoFile = file;
+    } else if (previewId === 'view_preview') {
+        currentOutsideViewPhotoFile = file;
+    }
+
+    // Show local preview using FileReader (no Supabase call)
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        preview.innerHTML = `
+            <img src="${e.target.result}" class="w-full h-24 object-cover rounded-lg shadow-md border border-brand-500/30">
+            <p class="text-[10px] text-yellow-400 mt-1">⏳ Will upload on submit</p>
+        `;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function uploadPendingPhotos() {
+    if (currentRoomPhotoFile) {
+        const file = currentRoomPhotoFile;
         const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${previewId}.${fileExt}`;
-        const filePath = `${fileName}`;
-
-        // 3. Upload the file to your Supabase Storage Bucket ('hostel-images')
-        showToast("Uploading image to cloud storage... 📸", "info");
-        const { data, error } = await db.storage
-            .from('hostel-images') // Make sure this matches your bucket name exactly!
-            .upload(filePath, file);
-
+        const filePath = `${Date.now()}-room_preview.${fileExt}`;
+        const { error } = await db.storage.from('hostel-images').upload(filePath, file);
         if (error) throw error;
-
-        // 4. Extract the Public URL for that uploaded object
-        const { data: urlData } = db.storage
-            .from('hostel-images')
-            .getPublicUrl(filePath);
-
-        const publicUrl = urlData.publicUrl;
-
-        // 5. Update the correct global variable based on which input box was clicked
-        if (previewId === 'room_preview') {
-            currentRoomPhotoUrl = publicUrl;
-            showToast("Room photo uploaded successfully! 🛏️", "success");
-        } else if (previewId === 'view_preview') {
-            currentOutsideViewPhotoUrl = publicUrl;
-            showToast("Window view photo uploaded successfully! 🌅", "success");
-        }
-
-        // 6. Replace the upload text with a small thumbnail preview of the actual hosted image
-        preview.innerHTML = `
-            <img src="${publicUrl}" class="w-full h-24 object-cover rounded-lg shadow-md border border-brand-500/30">
-            <p class="text-[10px] text-green-400 mt-1">✓ Cloud Synchronized</p>
-        `;
-
-    } catch (err) {
-        console.error("Storage upload failed:", err.message);
-        showToast("Photo upload failed. Check bucket permissions!", "error");
-        
-        // Reset the UI back to standard icon if it crashes
-        preview.innerHTML = `
-            <i data-lucide="${previewId === 'room_preview' ? 'camera' : 'mountain'}" class="w-8 h-8 mx-auto text-hostel-muted"></i>
-            <p class="text-sm text-hostel-muted">Click to retry upload</p>
-        `;
-        lucide.createIcons({ nodes: [preview] });
+        currentRoomPhotoUrl = db.storage.from('hostel-images').getPublicUrl(filePath).data.publicUrl;
+        currentRoomPhotoFile = null;
+    }
+    if (currentOutsideViewPhotoFile) {
+        const file = currentOutsideViewPhotoFile;
+        const fileExt = file.name.split('.').pop();
+        const filePath = `${Date.now()}-view_preview.${fileExt}`;
+        const { error } = await db.storage.from('hostel-images').upload(filePath, file);
+        if (error) throw error;
+        currentOutsideViewPhotoUrl = db.storage.from('hostel-images').getPublicUrl(filePath).data.publicUrl;
+        currentOutsideViewPhotoFile = null;
     }
 }
 
@@ -1403,6 +1390,13 @@ async function submitReview(e, hostelId) {
         showToast("Review contains prohibited language. Keep it clean! ⚠️", "error");
         return;
     }
+    try {
+        await uploadPendingPhotos();
+    } catch (err) {
+        console.error("Photo upload failed:", err.message);
+        showToast("Photo upload failed. Try again! 📸", "error");
+        return;
+    }
 
     // 3. Build the payload matching your database columns
     const reviewPayload = {
@@ -1447,6 +1441,8 @@ async function submitReview(e, hostelId) {
         // Reset global variables
         if (typeof currentRoomPhotoUrl !== 'undefined') currentRoomPhotoUrl = null;
         if (typeof currentOutsideViewPhotoUrl !== 'undefined') currentOutsideViewPhotoUrl = null;
+        currentRoomPhotoFile = null;
+        currentOutsideViewPhotoFile = null;
 
         if (e && e.target && typeof e.target.reset === 'function') {
             e.target.reset();
