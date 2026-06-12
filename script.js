@@ -1694,7 +1694,10 @@ function openAuthModal(mode = 'login') {
                         class="w-full px-3 py-2.5 bg-hostel-surface border border-hostel-border rounded-xl text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
                 </div>
                 <div>
-                    <label class="text-xs text-hostel-muted uppercase tracking-wider mb-1.5 block">Password</label>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs text-hostel-muted uppercase tracking-wider">Password</label>
+                        <button type="button" onclick="switchAuthTab('forgot')" class="text-xs text-brand-400 hover:text-brand-300 transition-colors">Forgot password?</button>
+                    </div>
                     <input id="auth-password" type="password" placeholder="••••••••"
                         class="w-full px-3 py-2.5 bg-hostel-surface border border-hostel-border rounded-xl text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
                 </div>
@@ -1722,9 +1725,24 @@ function switchAuthTab(mode) {
 
     document.getElementById('tab-login').className = `flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'login' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`;
     document.getElementById('tab-signup').className = `flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'signup' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`;
-    document.getElementById('auth-btn-label').textContent = mode === 'login' ? 'Login' : 'Create Account';
-    document.querySelector('#authModal h2').textContent = mode === 'login' ? '👋 Welcome back' : '🎓 Join the community';
+
+    const passwordDiv = document.getElementById('auth-password')?.closest('div.space-y-4 > div:last-of-type');
+
+    if (mode === 'forgot') {
+        document.querySelector('#authModal h2').textContent = '🔑 Reset Password';
+        document.getElementById('auth-btn-label').textContent = 'Send Reset Email';
+        document.getElementById('auth-submit-btn').querySelector('[data-lucide]')?.setAttribute('data-lucide', 'mail');
+        // Hide password field
+        if (passwordDiv) passwordDiv.style.display = 'none';
+    } else {
+        document.querySelector('#authModal h2').textContent = mode === 'login' ? '👋 Welcome back' : '🎓 Join the community';
+        document.getElementById('auth-btn-label').textContent = mode === 'login' ? 'Login' : 'Create Account';
+        // Show password field
+        if (passwordDiv) passwordDiv.style.display = '';
+    }
+
     document.getElementById('auth-message').classList.add('hidden');
+    lucide.createIcons({ nodes: [document.getElementById('authModal')] });
 }
 
 function closeAuthModal() {
@@ -1746,7 +1764,8 @@ async function handleAuthSubmit() {
         msgEl.classList.remove('hidden');
         return;
     }
-    if (!password || password.length < 6) {
+
+    if (mode !== 'forgot' && (!password || password.length < 6)) {
         msgEl.textContent = '⚠️ Password must be at least 6 characters.';
         msgEl.className = 'text-sm text-center text-red-400';
         msgEl.classList.remove('hidden');
@@ -1757,7 +1776,19 @@ async function handleAuthSubmit() {
     btn.innerHTML = `<svg class="animate-spin w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg> Please wait...`;
 
     try {
-        if (mode === 'signup') {
+        if (mode === 'forgot') {
+            const { error } = await db.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin
+            });
+            if (error) throw error;
+            msgEl.textContent = '✅ Reset link sent! Check your VIT email.';
+            msgEl.className = 'text-sm text-center text-green-400';
+            msgEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="mail" class="w-5 h-5"></i> <span>Email sent</span>`;
+            lucide.createIcons({ nodes: [btn] });
+
+        } else if (mode === 'signup') {
             const { error } = await db.auth.signUp({ email, password });
             if (error) throw error;
             msgEl.textContent = '✅ Check your VIT email for a confirmation link!';
@@ -1766,6 +1797,7 @@ async function handleAuthSubmit() {
             btn.disabled = false;
             btn.innerHTML = `<i data-lucide="mail" class="w-5 h-5"></i> <span>Confirmation sent</span>`;
             lucide.createIcons({ nodes: [btn] });
+
         } else {
             const { error } = await db.auth.signInWithPassword({ email, password });
             if (error) throw error;
