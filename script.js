@@ -1869,11 +1869,18 @@ async function approveReview(reviewId) {
 }
 
 // Action Handler: Reject/Delete Review
-async function rejectReview(reviewId, roomPhotoUrl, viewPhotoUrl) {
+async function rejectReview(reviewId) {
     if (!confirm("Are you sure you want to delete and purge this review permanently?")) return;
     
     try {
-        // 1. Delete row record from table
+        // 1. Fetch the review first to get photo URLs for cleanup
+        const { data: reviewData } = await db
+            .from('reviews')
+            .select('room_photo, outside_view_photo')
+            .eq('id', reviewId)
+            .single();
+
+        // 2. Delete the row
         const { error: dbError } = await db
             .from('reviews')
             .delete()
@@ -1881,13 +1888,25 @@ async function rejectReview(reviewId, roomPhotoUrl, viewPhotoUrl) {
 
         if (dbError) throw dbError;
 
-        // 2. Optional: Clean up Supabase Storage assets if present
-        // (Extracts paths from full public URLs to call storage.from().remove())
+        // 3. Clean up storage if photos exist
+        if (reviewData) {
+            const pathsToDelete = [];
+            if (reviewData.room_photo) {
+                const path = reviewData.room_photo.split('/storage/v1/object/public/review-photos/')[1];
+                if (path) pathsToDelete.push(path);
+            }
+            if (reviewData.outside_view_photo) {
+                const path = reviewData.outside_view_photo.split('/storage/v1/object/public/review-photos/')[1];
+                if (path) pathsToDelete.push(path);
+            }
+            if (pathsToDelete.length > 0) {
+                await db.storage.from('review-photos').remove(pathsToDelete);
+            }
+        }
 
-        showToast("Review completely rejected and purged.", "success");
+        showToast("Review rejected and purged.", "success");
         await fetchPendingReviews();
-        if (typeof fetchReviewsFromDatabase === 'function') await fetchReviewsFromDatabase();
-        renderApp();
+        navigateTo('admin'); // use navigateTo instead of renderApp() directly
     } catch (err) {
         showToast("Purge failed: " + err.message, "error");
     }
@@ -1962,9 +1981,9 @@ async function renderAdminDashboard() {
                             <button onclick="approveReview(${rev.id})" class="flex-1 md:w-32 bg-green-600 hover:bg-green-700 text-white font-medium text-sm py-2 px-4 rounded-xl transition-all shadow-md shadow-green-900/20">
                                 ✓ Approve
                             </button>
-                            <button onclick="rejectReview(${rev.id}, '${rev.room_photo}', '${rev.outside_view_photo}')" class="flex-1 md:w-32 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-medium text-sm py-2 px-4 rounded-xl transition-all">
-                                ✕ Reject
-                            </button>
+                            <button onclick="rejectReview(${rev.id})" class="flex-1 md:w-32 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-medium text-sm py-2 px-4 rounded-xl transition-all">
+    ✕ Reject
+</button>
                         </div>
 
                     </div>
