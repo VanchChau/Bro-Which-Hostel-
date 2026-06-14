@@ -320,13 +320,13 @@ function formatDate(dateStr) {
 // NAVIGATION
 // =============================================
 
-function navigateTo(view, hostelId = null) {
+async function navigateTo(view, hostelId = null) {
     currentView = view;
     if (view === 'detail' && hostelId) {
         currentHostelId = hostelId;
         currentTab = 'overview';
     }
-    renderApp();
+    await renderApp();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
