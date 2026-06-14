@@ -87,6 +87,7 @@ let currentRoomPhotoUrl = null;
 let currentOutsideViewPhotoUrl = null;
 let hostels = [];
 let reviews = [];
+let pendingReviews=[];
 
 // =============================================
 // STATE
@@ -1418,7 +1419,8 @@ async function submitReview(e, hostelId) {
         room_photo: currentRoomPhotoUrl,
         outside_view_photo: currentOutsideViewPhotoUrl,
         created_at: new Date().toISOString(),
-        resident_status: residentStatus
+        resident_status: residentStatus,
+        status: 'pending'
     };
 
     try {
@@ -1429,7 +1431,7 @@ async function submitReview(e, hostelId) {
 
         if (error) throw error;
         console.log("Successfully stored review in database:", data);
-        showToast("Review submitted successfully! 🙌", "success");
+        showToast("Review submitted successfully! It will appear once approved by the admin. 🙌", "success");
 
         if (typeof fetchReviewsFromDatabase === 'function') {
             await fetchReviewsFromDatabase();
@@ -1477,18 +1479,28 @@ function adminDeleteReview(reviewId) {
         console.error("Review not found.");
     }
 }
-function renderApp() {
+// 🌟 FIX: Added 'async' so we can fetch pending database items on the fly
+async function renderApp() {
     const app = document.getElementById('app');
+    
     if (currentView === 'home') {
         app.innerHTML = renderHomePage();
     } else if (currentView === 'detail') {
         app.innerHTML = renderDetailPage();
+    } else if (currentView === 'about') {
+        app.innerHTML = renderAboutPage();
+    } 
+    // 🌟 NEW: Add the admin view branch here
+    else if (currentView === 'admin') {
+        // Wait for the latest pending reviews to download before rendering
+        await fetchPendingReviews(); 
+        app.innerHTML = await renderAdminDashboard();
     }
-    else if (currentView === 'about') {
-    app.innerHTML = renderAboutPage();
-}
+
     // Re-create Lucide icons
-    lucide.createIcons();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
 
     // Animate rating bars after render
     setTimeout(() => {
@@ -1598,13 +1610,14 @@ async function fetchReviewsFromDatabase() {
         const { data, error } = await db
             .from('reviews')
             .select('*')
+            .eq('status', 'approved') // 🌟 FIX: Only download reviews that have been approved by you
             .order('created_at', { ascending: false });
 
         if (error) throw error;
 
         // Save live database entries into your global reviews state
         reviews = data || [];
-        console.log("Successfully loaded reviews from database:", reviews);
+        console.log("Successfully loaded approved reviews from database:", reviews);
 
         // Force a re-render so math calculations update with live scores
         renderApp();
@@ -1817,4 +1830,147 @@ async function handleAuthSubmit() {
 async function handleSignOut() {
     await db.auth.signOut();
     showToast('Logged out successfully!', 'success');
+}
+// State tracker for pending queue admin panel
+
+async function fetchPendingReviews() {
+    try {
+        const { data, error } = await db
+            .from('reviews')
+            .select('*')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        pendingReviews = data || [];
+    } catch (err) {
+        showToast("Failed to fetch queue: " + err.message, "error");
+    }
+}
+
+// Action Handler: Approve Review
+async function approveReview(reviewId) {
+    try {
+        const { error } = await db
+            .from('reviews')
+            .update({ status: 'approved' })
+            .eq('id', reviewId);
+
+        if (error) throw error;
+        
+        showToast("Review Approved! Live on site.", "success");
+        // Reload data structures
+        await fetchPendingReviews();
+        if (typeof fetchReviewsFromDatabase === 'function') await fetchReviewsFromDatabase();
+        renderApp();
+    } catch (err) {
+        showToast("Action failed: " + err.message, "error");
+    }
+}
+
+// Action Handler: Reject/Delete Review
+async function rejectReview(reviewId, roomPhotoUrl, viewPhotoUrl) {
+    if (!confirm("Are you sure you want to delete and purge this review permanently?")) return;
+    
+    try {
+        // 1. Delete row record from table
+        const { error: dbError } = await db
+            .from('reviews')
+            .delete()
+            .eq('id', reviewId);
+
+        if (dbError) throw dbError;
+
+        // 2. Optional: Clean up Supabase Storage assets if present
+        // (Extracts paths from full public URLs to call storage.from().remove())
+
+        showToast("Review completely rejected and purged.", "success");
+        await fetchPendingReviews();
+        if (typeof fetchReviewsFromDatabase === 'function') await fetchReviewsFromDatabase();
+        renderApp();
+    } catch (err) {
+        showToast("Purge failed: " + err.message, "error");
+    }
+}
+
+// Render Engine for Admin Dashboard Panel Layout
+async function renderAdminDashboard() {
+    // Prevent unauthorized loading flash by checking a simple session pass or prompt local variable if needed
+    
+    return `
+    <section class="max-w-6xl mx-auto px-4 py-12">
+        <div class="flex items-center justify-between mb-8 border-b border-hostel-border pb-4">
+            <div>
+                <h1 class="font-heading text-3xl font-bold text-white flex items-center gap-2">
+                    🛡️ Content Moderation Queue
+                </h1>
+                <p class="text-sm text-hostel-muted mt-1">Pending reviews waiting for verification approval</p>
+            </div>
+            <button onclick="navigateTo('home')" class="px-4 py-2 bg-hostel-surface hover:bg-hostel-card border border-hostel-border rounded-xl text-sm transition-all">
+                ← Exit Board
+            </button>
+        </div>
+
+        ${pendingReviews.length === 0 ? `
+            <div class="text-center py-20 bg-hostel-card rounded-2xl border border-hostel-border">
+                <div class="text-5xl mb-4">✨</div>
+                <h3 class="font-heading text-xl font-semibold text-white">Queue completely clear!</h3>
+                <p class="text-hostel-muted mt-1">Excellent work, all student uploads are up to date.</p>
+            </div>
+        ` : `
+            <div class="space-y-6">
+                ${pendingReviews.map(rev => `
+                    <div class="bg-hostel-card border border-hostel-border rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-start">
+                        
+                        <div class="flex-1 space-y-3">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="bg-brand-600/20 text-brand-400 font-bold text-xs px-2.5 py-1 rounded-md border border-brand-500/20">
+                                    Hostel ID: ${rev.hostel_id}
+                                </span>
+                                <span class="bg-hostel-surface text-gray-300 text-xs px-2.5 py-1 rounded-md border border-hostel-border">
+                                    Room: ${rev.room_identifier} (${rev.room_type || 'N/A'})
+                                </span>
+                                <span class="text-xs text-hostel-muted">⏱️ ${formatDate(rev.created_at)}</span>
+                            </div>
+                            
+                            <p class="text-gray-100 text-sm italic leading-relaxed bg-hostel-surface/40 p-4 rounded-xl border border-hostel-border/50">
+                                "${rev.comment || 'No textual comment provided.'}"
+                            </p>
+                            
+                            <div class="text-xs text-hostel-muted">
+                                <strong>Outside View Description:</strong> ${rev.outside_view_description || 'None'}
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3 flex-wrap md:flex-nowrap">
+                            ${rev.room_photo ? `
+                                <div class="relative group cursor-zoom-in" onclick="openImageModal('${rev.room_photo}', 'Room')">
+                                    <img src="${rev.room_photo}" class="w-28 h-28 object-cover rounded-xl border border-hostel-border shadow-md">
+                                    <span class="absolute bottom-1 left-1 bg-black/70 text-[9px] text-white px-1.5 py-0.5 rounded">Room</span>
+                                </div>
+                            ` : ''}
+                            
+                            ${rev.outside_view_photo ? `
+                                <div class="relative group cursor-zoom-in" onclick="openImageModal('${rev.outside_view_photo}', 'View')">
+                                    <img src="${rev.outside_view_photo}" class="w-28 h-28 object-cover rounded-xl border border-hostel-border shadow-md">
+                                    <span class="absolute bottom-1 left-1 bg-black/70 text-[9px] text-white px-1.5 py-0.5 rounded">View</span>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="flex flex-row md:flex-col gap-2 w-full md:w-auto justify-end pt-4 md:pt-0 border-t md:border-t-0 border-hostel-border/50">
+                            <button onclick="approveReview(${rev.id})" class="flex-1 md:w-32 bg-green-600 hover:bg-green-700 text-white font-medium text-sm py-2 px-4 rounded-xl transition-all shadow-md shadow-green-900/20">
+                                ✓ Approve
+                            </button>
+                            <button onclick="rejectReview(${rev.id}, '${rev.room_photo}', '${rev.outside_view_photo}')" class="flex-1 md:w-32 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-medium text-sm py-2 px-4 rounded-xl transition-all">
+                                ✕ Reject
+                            </button>
+                        </div>
+
+                    </div>
+                `).join('')}
+            </div>
+        `}
+    </section>
+    `;
 }
