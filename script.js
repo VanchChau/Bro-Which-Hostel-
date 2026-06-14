@@ -1870,44 +1870,33 @@ async function approveReview(reviewId) {
 
 // Action Handler: Reject/Delete Review
 async function rejectReview(reviewId) {
-    if (!confirm("Are you sure you want to delete and purge this review permanently?")) return;
-    
     try {
-        // 1. Fetch the review first to get photo URLs for cleanup
+        console.log('Rejecting review:', reviewId);
+
         const { data: reviewData } = await db
             .from('reviews')
             .select('room_photo, outside_view_photo')
             .eq('id', reviewId)
             .single();
 
-        // 2. Delete the row
+        console.log('Review data fetched:', reviewData);
+
         const { error: dbError } = await db
             .from('reviews')
             .delete()
             .eq('id', reviewId);
 
+        console.log('Delete error (should be null):', dbError);
         if (dbError) throw dbError;
 
-        // 3. Clean up storage if photos exist
-        if (reviewData) {
-            const pathsToDelete = [];
-            if (reviewData.room_photo) {
-                const path = reviewData.room_photo.split('/storage/v1/object/public/review-photos/')[1];
-                if (path) pathsToDelete.push(path);
-            }
-            if (reviewData.outside_view_photo) {
-                const path = reviewData.outside_view_photo.split('/storage/v1/object/public/review-photos/')[1];
-                if (path) pathsToDelete.push(path);
-            }
-            if (pathsToDelete.length > 0) {
-                await db.storage.from('review-photos').remove(pathsToDelete);
-            }
-        }
-
-        showToast("Review rejected and purged.", "success");
+        showToast("Review rejected.", "success");
         await fetchPendingReviews();
-        navigateTo('admin'); // use navigateTo instead of renderApp() directly
+        console.log('Pending reviews after delete:', pendingReviews);
+        currentView = 'admin';
+        await renderApp();
+
     } catch (err) {
+        console.log('Catch block hit:', err.message);
         showToast("Purge failed: " + err.message, "error");
     }
 }
