@@ -1632,23 +1632,48 @@ async function fetchReviewsFromDatabase() {
 
 let currentUser = null;
 
+// AFTER
 function monitorAuthState() {
-    db.auth.onAuthStateChange((event, session) => {
+    db.auth.onAuthStateChange(async (event, session) => {
         currentUser = session?.user || null;
+        if (currentUser?.email === ADMIN_EMAIL) await fetchPendingReviews();
         updateNavAuth();
         renderApp();
     });
-    // Also check immediately on load
-    db.auth.getSession().then(({ data: { session } }) => {
+    db.auth.getSession().then(async ({ data: { session } }) => {
         currentUser = session?.user || null;
+        if (currentUser?.email === ADMIN_EMAIL) await fetchPendingReviews();
         updateNavAuth();
         renderApp();
     });
 }
 
+// AFTER
+const ADMIN_EMAIL = 'vansh.chaudhry2024@vitstudent.ac.in';
+
 function updateNavAuth() {
     const btn = document.getElementById('nav-auth-btn');
     if (!btn) return;
+
+    // Admin moderate button (injected into the navbar, sits next to "About")
+    const moderateSlot = document.getElementById('nav-moderate-btn');
+    if (moderateSlot) {
+        if (currentUser?.email === ADMIN_EMAIL) {
+            const count = pendingReviews.length;
+            moderateSlot.innerHTML = `
+                <button onclick="navigateTo('admin')"
+                    class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-fuchsia-400 hover:text-white hover:bg-fuchsia-600/20 border border-fuchsia-500/30 transition-all relative">
+                    <i data-lucide="shield-check" class="w-4 h-4"></i>
+                    Moderate
+                    ${count > 0 ? `<span class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-fuchsia-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">${count}</span>` : ''}
+                </button>
+            `;
+            lucide.createIcons({ nodes: [moderateSlot] });
+        } else {
+            moderateSlot.innerHTML = '';
+        }
+    }
+
     if (currentUser) {
         const initials = currentUser.email?.slice(0, 2).toUpperCase() || '?';
         btn.innerHTML = `
