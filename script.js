@@ -1658,6 +1658,15 @@ let currentUser = null;
 // AFTER
 function monitorAuthState() {
     db.auth.onAuthStateChange(async (event, session) => {
+        // Supabase fires this when the user lands back here via the
+        // "reset password" email link. Intercept it BEFORE the normal
+        // login flow runs, otherwise the recovery session just gets
+        // treated like a regular login and the password is never changed.
+        if (event === 'PASSWORD_RECOVERY') {
+            openSetNewPasswordModal();
+            return;
+        }
+
         currentUser = session?.user || null;
         if (currentUser?.email === ADMIN_EMAIL) await fetchPendingReviews();
         updateNavAuth();
@@ -1808,6 +1817,104 @@ function switchAuthTab(mode) {
 
 function closeAuthModal() {
     document.getElementById('authModal')?.remove();
+}
+
+// =============================================
+// PASSWORD RECOVERY (post-reset-link landing)
+// =============================================
+// Supabase puts the user into a real, signed-in "recovery" session as soon
+// as they click the link in the reset email — it does NOT show any UI on
+// its own. This modal is what lets them actually pick a new password
+// while that recovery session is active.
+function openSetNewPasswordModal() {
+    document.getElementById('authModal')?.remove();
+    document.getElementById('newPasswordModal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'newPasswordModal';
+    modal.className = 'fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-hostel-card border border-hostel-border rounded-2xl p-7 w-full max-w-md shadow-2xl animate-fade-in-up">
+            <div class="mb-6">
+                <h2 class="font-heading text-2xl font-bold">🔑 Set a new password</h2>
+                <p class="text-sm text-hostel-muted mt-1">You're verified — choose a new password below.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-hostel-muted uppercase tracking-wider mb-1.5 block">New Password</label>
+                    <input id="new-password" type="password" placeholder="••••••••"
+                        class="w-full px-3 py-2.5 bg-hostel-surface border border-hostel-border rounded-xl text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
+                </div>
+                <div>
+                    <label class="text-xs text-hostel-muted uppercase tracking-wider mb-1.5 block">Confirm Password</label>
+                    <input id="new-password-confirm" type="password" placeholder="••••••••"
+                        class="w-full px-3 py-2.5 bg-hostel-surface border border-hostel-border rounded-xl text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
+                </div>
+
+                <button id="new-password-submit-btn" onclick="handleSetNewPassword()"
+                    class="w-full py-3 bg-brand-600 hover:bg-brand-700 rounded-xl font-heading font-semibold text-base transition-colors flex items-center justify-center gap-2">
+                    <i data-lucide="check" class="w-5 h-5"></i>
+                    <span>Update Password</span>
+                </button>
+
+                <p id="new-password-message" class="text-sm text-center text-hostel-muted hidden"></p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    lucide.createIcons({ nodes: [modal] });
+    document.getElementById('new-password').focus();
+}
+
+function closeSetNewPasswordModal() {
+    document.getElementById('newPasswordModal')?.remove();
+}
+
+async function handleSetNewPassword() {
+    const newPassword = document.getElementById('new-password')?.value;
+    const confirmPassword = document.getElementById('new-password-confirm')?.value;
+    const msgEl = document.getElementById('new-password-message');
+    const btn = document.getElementById('new-password-submit-btn');
+
+    if (!newPassword || newPassword.length < 6) {
+        msgEl.textContent = '⚠️ Password must be at least 6 characters.';
+        msgEl.className = 'text-sm text-center text-red-400';
+        msgEl.classList.remove('hidden');
+        return;
+    }
+    if (newPassword !== confirmPassword) {
+        msgEl.textContent = '⚠️ Passwords do not match.';
+        msgEl.className = 'text-sm text-center text-red-400';
+        msgEl.classList.remove('hidden');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="animate-spin w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg> Please wait...`;
+
+    try {
+        const { error } = await db.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+
+        showToast('Password updated! You are now logged in 🎉', 'success');
+        closeSetNewPasswordModal();
+
+        // The recovery session is now a normal authenticated session —
+        // bring the rest of the app's auth state in line with that.
+        const { data: { session } } = await db.auth.getSession();
+        currentUser = session?.user || null;
+        if (currentUser?.email === ADMIN_EMAIL) await fetchPendingReviews();
+        updateNavAuth();
+        renderApp();
+    } catch (err) {
+        msgEl.textContent = `⚠️ ${err.message}`;
+        msgEl.className = 'text-sm text-center text-red-400';
+        msgEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="check" class="w-5 h-5"></i> <span>Update Password</span>`;
+        lucide.createIcons({ nodes: [btn] });
+    }
 }
 
 async function handleAuthSubmit() {
