@@ -1301,23 +1301,45 @@ async function handlePhotoUpload(input, previewId) {
     if (!input.files || input.files.length === 0) return;
 
     const file = input.files[0];
+    
+    // Show a quick loading state in the UI while compressing
+    preview.innerHTML = `
+        <div class="py-4 text-xs text-brand-400 flex items-center justify-center gap-2">
+            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+            Optimizing image...
+        </div>
+    `;
 
-    // Store file in memory, don't upload yet
-    if (previewId === 'room_preview') {
-        currentRoomPhotoFile = file;
-    } else if (previewId === 'view_preview') {
-        currentOutsideViewPhotoFile = file;
-    }
+    try {
+        // 🌟 COMPRESSION INTEGRATION
+        // Downsizes massive multi-megabyte photos to snappy, server-friendly versions
+        const compressedFile = await compressImage(file, 1280, 0.75);
 
-    // Show local preview using FileReader (no Supabase call)
-    const reader = new FileReader();
-    reader.onload = (e) => {
+        // Store the optimized file in memory
+        if (previewId === 'room_preview') {
+            currentRoomPhotoFile = compressedFile;
+        } else if (previewId === 'view_preview') {
+            currentOutsideViewPhotoFile = compressedFile;
+        }
+
+        // Show local preview using FileReader
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            preview.innerHTML = `
+                <img src="${e.target.result}" class="w-full h-24 object-cover rounded-lg shadow-md border border-brand-500/30">
+                <p class="text-[10px] text-green-400 mt-1">✨ Optimized! Will upload on submit</p>
+            `;
+        };
+        reader.readAsDataURL(compressedFile);
+
+    } catch (err) {
+        console.error("Image optimization failed:", err);
         preview.innerHTML = `
-            <img src="${e.target.result}" class="w-full h-24 object-cover rounded-lg shadow-md border border-brand-500/30">
-            <p class="text-[10px] text-yellow-400 mt-1">⏳ Will upload on submit</p>
+            <i data-lucide="alert-circle" class="w-8 h-8 mx-auto text-red-400"></i>
+            <p class="text-xs text-red-400 mt-1">Failed to process image. Try another one.</p>
         `;
-    };
-    reader.readAsDataURL(file);
+        if (window.lucide) lucide.createIcons({ nodes: [preview] });
+    }
 }
 
 async function uploadPendingPhotos() {
@@ -2006,4 +2028,59 @@ async function renderAdminDashboard() {
         `}
     </section>
     `;
+}
+/**
+ * Automatically downsizes and compresses an image on the client side.
+ * Converts a 15MB massive image into a clean ~150KB 720p/1080p image.
+ */
+function compressImage(file, maxDimension = 1280, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+
+                // Calculate downscaling aspect ratio
+                if (width > height) {
+                    if (width > maxDimension) {
+                        height = Math.round((height * maxDimension) / width);
+                        width = maxDimension;
+                    }
+                } else {
+                    if (height > maxDimension) {
+                        width = Math.round((width * maxDimension) / height);
+                        height = maxDimension;
+                    }
+                }
+
+                // Draw to a hidden memory canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert canvas back into a compressed File object
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error("Canvas compression failed"));
+                        return;
+                    }
+                    const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                        type: "image/jpeg",
+                        lastModified: Date.now()
+                    });
+                    resolve(compressedFile);
+                }, "image/jpeg", quality);
+            };
+        };
+        reader.onerror = (err) => reject(err);
+    });
 }
