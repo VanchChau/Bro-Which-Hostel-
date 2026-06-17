@@ -2083,7 +2083,7 @@ async function renderAdminDashboard() {
         ` : `
             <div class="space-y-6">
                 ${pendingReviews.map(rev => `
-                    <div class="bg-hostel-card border border-hostel-border rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-start">
+                    <div class="bg-hostel-card border border-hostel-border rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-start ${rev.ai_flagged ? 'ring-2 ring-amber-500/50' : ''}">
                         
                         <div class="flex-1 space-y-3">
                             <div class="flex items-center gap-2 flex-wrap">
@@ -2094,7 +2094,22 @@ async function renderAdminDashboard() {
                                     Room: ${rev.room_identifier} (${rev.room_type || 'N/A'})
                                 </span>
                                 <span class="text-xs text-hostel-muted">⏱️ ${formatDate(rev.created_at)}</span>
+                                ${rev.ai_flagged ? `
+                                    <span class="bg-amber-500/20 text-amber-400 font-bold text-xs px-2.5 py-1 rounded-md border border-amber-500/30 flex items-center gap-1" title="${(rev.ai_reason || 'Flagged by AI moderation').replace(/"/g, '&quot;')}">
+                                        🚩 AI Flagged
+                                    </span>
+                                ` : !rev.ai_checked ? `
+                                    <span class="bg-hostel-surface text-hostel-muted text-xs px-2.5 py-1 rounded-md border border-hostel-border flex items-center gap-1">
+                                        ⏳ AI check pending
+                                    </span>
+                                ` : ''}
                             </div>
+                            
+                            ${rev.ai_flagged && rev.ai_reason ? `
+                                <div class="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                                    <strong>AI reason:</strong> ${rev.ai_reason}
+                                </div>
+                            ` : ''}
                             
                             <p class="text-gray-100 text-sm italic leading-relaxed bg-hostel-surface/40 p-4 rounded-xl border border-hostel-border/50">
                                 "${rev.comment || 'No textual comment provided.'}"
