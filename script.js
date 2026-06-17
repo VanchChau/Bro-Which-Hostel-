@@ -1424,6 +1424,7 @@ async function submitReview(e, hostelId) {
     // 3. Build the payload matching your database columns
     const reviewPayload = {
         hostel_id: currentHostelId,
+        user_email: currentUser?.email || null,
         room_identifier: roomNo || "Unknown Room",
         room_type: roomType, // Now getting saved!
         outside_view_description: outsideViewDescription, // Now getting saved!
