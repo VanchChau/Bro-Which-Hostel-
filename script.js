@@ -1343,10 +1343,18 @@ async function handlePhotoUpload(input, previewId) {
 }
 
 async function uploadPendingPhotos() {
+    // RLS now requires the first path segment to equal auth.uid(), so every
+    // upload must be scoped under the current user's own folder.
+    const { data: { session } } = await db.auth.getSession();
+    const uid = session?.user?.id;
+    if (!uid) {
+        throw new Error('You must be logged in to upload photos.');
+    }
+
     if (currentRoomPhotoFile) {
         const file = currentRoomPhotoFile;
         const fileExt = file.name.split('.').pop();
-        const filePath = `${Date.now()}-room_preview.${fileExt}`;
+        const filePath = `${uid}/${Date.now()}-room_preview.${fileExt}`;
         const { error } = await db.storage.from('hostel-images').upload(filePath, file);
         if (error) throw error;
         currentRoomPhotoUrl = db.storage.from('hostel-images').getPublicUrl(filePath).data.publicUrl;
@@ -1355,7 +1363,7 @@ async function uploadPendingPhotos() {
     if (currentOutsideViewPhotoFile) {
         const file = currentOutsideViewPhotoFile;
         const fileExt = file.name.split('.').pop();
-        const filePath = `${Date.now()}-view_preview.${fileExt}`;
+        const filePath = `${uid}/${Date.now()}-view_preview.${fileExt}`;
         const { error } = await db.storage.from('hostel-images').upload(filePath, file);
         if (error) throw error;
         currentOutsideViewPhotoUrl = db.storage.from('hostel-images').getPublicUrl(filePath).data.publicUrl;
